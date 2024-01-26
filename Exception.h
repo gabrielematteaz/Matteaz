@@ -86,7 +86,7 @@ namespace Matteaz
 			return *this;
 		}
 
-		virtual const wchar_t* Message() const noexcept
+		[[nodiscard]] virtual const wchar_t* Message() const noexcept
 		{
 			return message;
 		}
