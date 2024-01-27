@@ -10,7 +10,7 @@ namespace Matteaz
 
 	public:
 		SafeHandle(const SafeHandle&) = delete;
-		SafeHandle& operator = (const SafeHandle&&) = delete;
+		SafeHandle& operator = (const SafeHandle&) = delete;
 
 		constexpr explicit SafeHandle(HANDLE handle = INVALID_HANDLE_VALUE) noexcept :
 			handle(handle)
@@ -21,7 +21,7 @@ namespace Matteaz
 		constexpr SafeHandle(SafeHandle&& safeHandle) noexcept :
 			handle(safeHandle.handle)
 		{
-			safeHandle.handle = INVALID_HANDLE_VALUE;
+			safeHandle.handle = NULL;
 		}
 
 		~SafeHandle()
@@ -47,7 +47,8 @@ namespace Matteaz
 			return handle;
 		}
 
-		[[nodiscard]] constexpr HANDLE Release() noexcept
+		[[nodiscard("The managed handle will be lost and never be closed")]]
+		constexpr HANDLE Release() noexcept
 		{
 			HANDLE handle = this->handle;
 
