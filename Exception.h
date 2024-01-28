@@ -10,9 +10,10 @@ namespace Matteaz
 		HANDLE heap;
 
 	public:
-		/* Since this constructor is designed not to throw any axceptions and the copying
-		process of "message" might fail, "this->message" is not guaranteed to be
-		a valid copy (It might be NULL) */
+		/* This constructor is designed not to throw exceptions (If the copying process of "message"
+		fails then "this->message" is NULL). Every instance of this class assumes that
+		"this->message" is a valid string for the entirety of its lifetime (It is recommended to pass the
+		handle to the default process heap since it cannot be destroyed using "HeapDestroy") */
 		explicit Exception(const wchar_t* message = NULL, HANDLE heap = NULL) noexcept :
 			message(NULL),
 			heap(heap)
@@ -65,7 +66,7 @@ namespace Matteaz
 					if (messageCopy != NULL) wcsncpy_s(messageCopy, messageLength, exception.message, messageLength);
 				}
 
-				/* If the next line is commented then you commit to the fact
+				/* If the next line is commented out then you commit to the fact
 				that you could lose the previous message in case the copying process fails */
 				if (messageCopy != NULL)
 				{
@@ -99,9 +100,10 @@ namespace Matteaz
 			return heap;
 		}
 
-		/* This class is not designed to let "message" be modified but if you really wanted to do
-		so just cast away the const-ness of the pointer returned by this
-		function (It is safe since the original message was copied in the constructor) */
+		/* This class is not designed to let "this->message" be modified but if you really
+		wanted to do so you can mess with the pointer returned by this function (As long as you
+		don't reallocate/deallocate it. Also remember that the size of the buffer is
+		exactly "(wcslen(this->message) + 1) * sizeof(wchar_t)") */
 		[[nodiscard]] constexpr virtual const wchar_t* Message() const noexcept
 		{
 			return message;

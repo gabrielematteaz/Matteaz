@@ -36,6 +36,7 @@ namespace Matteaz
 			{
 				CloseHandle(handle);
 				handle = safeHandle.handle;
+
 				safeHandle.handle = INVALID_HANDLE_VALUE;
 			}
 
@@ -47,7 +48,7 @@ namespace Matteaz
 			return handle;
 		}
 
-		[[nodiscard("The managed handle will be lost and never be closed")]]
+		[[nodiscard("The managed handle would be lost and never be closed")]]
 		constexpr HANDLE Release() noexcept
 		{
 			HANDLE handle = this->handle;
@@ -60,7 +61,6 @@ namespace Matteaz
 		bool Reset(HANDLE handle = INVALID_HANDLE_VALUE) noexcept
 		{
 			if (this->handle == handle) return !handle;
-
 			CloseHandle(this->handle);
 			this->handle = handle;
 
