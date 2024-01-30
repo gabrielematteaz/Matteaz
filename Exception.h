@@ -51,7 +51,8 @@ namespace Matteaz
 
 		Exception& operator = (const Exception& exception) noexcept
 		{
-			if (this != &exception)
+			/* messages are more likely to be different */
+			if (message != exception.message || heap != exception.heap)
 			{
 				wchar_t* messageCopy = NULL;
 
@@ -74,7 +75,7 @@ namespace Matteaz
 
 		Exception& operator = (Exception&& exception) noexcept
 		{
-			if (this != &exception)
+			if (message != exception.message || heap != exception.heap)
 			{
 				HeapFree(heap, 0, message);
 				message = exception.message;
