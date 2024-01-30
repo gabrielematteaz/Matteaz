@@ -58,13 +58,13 @@ namespace Matteaz
 			return handle;
 		}
 
-		bool Reset(HANDLE handle = INVALID_HANDLE_VALUE) noexcept
+		void Reset(HANDLE handle = INVALID_HANDLE_VALUE) noexcept
 		{
-			if (this->handle == handle) return !handle;
-			CloseHandle(this->handle);
-			this->handle = handle;
-
-			return true;
+			if (this->handle != handle)
+			{
+				CloseHandle(this->handle);
+				this->handle = handle;
+			}
 		}
 	};
 }
