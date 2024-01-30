@@ -6,22 +6,21 @@ namespace Matteaz
 {
 	class Exception
 	{
-		wchar_t* message;
 		HANDLE heap;
+		wchar_t* message;
 
 	public:
-		/* This constructor is designed not to throw exceptions (If the copying process of "message"
-		fails then "this->message" is NULL). Every instance of this class assumes that
-		"this->message" is a valid string for the entirety of its lifetime (It is recommended to pass the
-		handle to the default process heap since it cannot be destroyed using "HeapDestroy") */
-		explicit Exception(const wchar_t* message = NULL, HANDLE heap = NULL) noexcept :
-			message(NULL),
-			heap(heap)
+		/* It is not recommended to pass a handle to a private heap, as private heaps can be be destroyed
+		using "HeapDestroy" (it would cause "this->message" to be invalidated prematurely) */
+		explicit Exception(const wchar_t* message = NULL, HANDLE heap = GetProcessHeap()) noexcept :
+			heap(heap),
+			message(NULL)
 		{
+			/* If "message" is NULL, there is no message to copy. If "heap" is NULL, no allocation can be made */
 			if (message != NULL && heap != NULL)
 			{
-				/* "wcsnlen" is safer but I can't come up with a meaningful maximum
-				length (There is no need to use "wcsnlen_s" since I already checked if "message" is NULL) */
+				/* "wcsnlen" is more secure but no maximum length is set ("wcsnlen_s" is useless
+				since we already know that "message" is not NULL) */
 				size_t messageLength = wcslen(message) + 1;
 
 				wchar_t* messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
@@ -38,8 +37,8 @@ namespace Matteaz
 		}
 
 		constexpr Exception(Exception&& exception) noexcept :
-			message(exception.message),
-			heap(exception.heap)
+			heap(exception.heap),
+			message(exception.message)
 		{
 			exception.message = NULL;
 		}
@@ -52,29 +51,22 @@ namespace Matteaz
 
 		Exception& operator = (const Exception& exception) noexcept
 		{
-			if (message != exception.message)
+			if (this != &exception)
 			{
 				wchar_t* messageCopy = NULL;
 
 				if (exception.message != NULL && exception.heap != NULL)
 				{
-					/* Go to the constructor definition to know why I
-					used "wcslen" instead of "wcsnlen" */
 					size_t messageLength = wcslen(exception.message) + 1;
 
 					messageCopy = static_cast < wchar_t* > (HeapAlloc(exception.heap, 0, messageLength * sizeof(wchar_t)));
 					if (messageCopy != NULL) wcsncpy_s(messageCopy, messageLength, exception.message, messageLength);
 				}
 
-				/* If the next line is commented out then you commit to the fact
-				that you could lose the previous message in case the copying process fails */
-				if (messageCopy != NULL)
-				{
-					HeapFree(heap, 0, message);
-					message = messageCopy;
+				HeapFree(heap, 0, message);
+				message = messageCopy;
 
-					heap = exception.heap;
-				}
+				heap = exception.heap;
 			}
 
 			return *this;
@@ -82,7 +74,7 @@ namespace Matteaz
 
 		Exception& operator = (Exception&& exception) noexcept
 		{
-			if (message != exception.message)
+			if (this != &exception)
 			{
 				HeapFree(heap, 0, message);
 				message = exception.message;
@@ -100,13 +92,30 @@ namespace Matteaz
 			return heap;
 		}
 
-		/* This class is not designed to let "this->message" be modified but if you really
-		wanted to do so you can mess with the pointer returned by this function (As long as you
-		don't reallocate/deallocate it. Also remember that the size of the buffer is
-		exactly "(wcslen(this->message) + 1) * sizeof(wchar_t)") */
 		[[nodiscard]] constexpr virtual const wchar_t* Message() const noexcept
 		{
 			return message;
+		}
+
+		void Reset(const wchar_t* message = NULL, HANDLE heap = GetProcessHeap()) noexcept
+		{
+			if (this->message != message || this->heap != heap)
+			{
+				wchar_t* messageCopy = NULL;
+
+				if (message != NULL && heap != NULL)
+				{
+					size_t messageLength = wcslen(message) + 1;
+
+					messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
+					if (messageCopy != NULL) wcsncpy_s(messageCopy, messageLength, message, messageLength);
+				}
+
+				HeapFree(this->heap, 0, this->message);
+				this->message = messageCopy;
+
+				this->heap = heap;
+			}
 		}
 	};
 }
