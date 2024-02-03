@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Windows.h>
+#include < Windows.h >
 
 namespace Matteaz
 {
@@ -21,7 +21,7 @@ namespace Matteaz
 		constexpr SafeHandle(SafeHandle&& safeHandle) noexcept :
 			handle(safeHandle.handle)
 		{
-			safeHandle.handle = NULL;
+
 		}
 
 		~SafeHandle()
@@ -36,7 +36,6 @@ namespace Matteaz
 			{
 				CloseHandle(handle);
 				handle = safeHandle.handle;
-
 				safeHandle.handle = INVALID_HANDLE_VALUE;
 			}
 
@@ -53,7 +52,7 @@ namespace Matteaz
 		{
 			HANDLE handle = this->handle;
 
-			this->handle = INVALID_HANDLE_VALUE;
+			this->handle = handle;
 
 			return handle;
 		}
