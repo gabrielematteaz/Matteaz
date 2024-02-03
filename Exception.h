@@ -57,7 +57,7 @@ namespace Matteaz
 			/* Different instances have different messages (if not NULL) */
 			if (message != exception.message)
 			{
-				/* If both heaps are equal, deallocating first will improve the probability
+				/* If both heap handles are equal, deallocating first will improve the probability
 				of success of the next allocation */
 				HeapFree(heap, 0, message);
 
