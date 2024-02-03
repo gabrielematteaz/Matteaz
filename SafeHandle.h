@@ -9,6 +9,7 @@ namespace Matteaz
 		HANDLE handle;
 
 	public:
+		/* One could use 'DuplicateHandle' to duplicate 'this->handle' and link it to a new instance of 'SafeHandle' */
 		SafeHandle(const SafeHandle&) = delete;
 		SafeHandle& operator = (const SafeHandle&) = delete;
 
@@ -52,18 +53,19 @@ namespace Matteaz
 		{
 			HANDLE handle = this->handle;
 
-			this->handle = handle;
+			this->handle = INVALID_HANDLE_VALUE;
 
 			return handle;
 		}
 
-		void Reset(HANDLE handle = INVALID_HANDLE_VALUE) noexcept
+		bool Reset(HANDLE handle = INVALID_HANDLE_VALUE) noexcept
 		{
-			if (this->handle != handle)
-			{
-				CloseHandle(this->handle);
-				this->handle = handle;
-			}
+			if (this->handle == handle) return this->handle == INVALID_HANDLE_VALUE ? true : false;
+
+			CloseHandle(this->handle);
+			this->handle = handle;
+
+			return true;
 		}
 	};
 }

@@ -15,7 +15,7 @@ namespace Matteaz
 			heap(NULL),
 			message(NULL)
 		{
-			if (heap != NULL && message != NULL)
+			if (message != NULL && heap != NULL)
 			{
 				/* 'wcsnlen' is safer but there is no maximum length set ('wcsnlen_s' is useless
 				since we already know that 'message' is not NULL) */
@@ -112,34 +112,35 @@ namespace Matteaz
 			return message;
 		}
 
-		void Reset(HANDLE heap = NULL, const wchar_t* message = NULL) noexcept
+		bool Reset(HANDLE heap = NULL, const wchar_t* message = NULL) noexcept
 		{
 			/* messages are more likely to be different */
-			if (this->message != message || this->heap != heap)
+			if (this->message == message && this->heap == heap) return this->message == NULL ? true : false;
+
+			HeapFree(this->heap, 0, this->message);
+
+			size_t messageLength;
+			wchar_t* messageCopy = NULL;
+
+			if (message != NULL && heap != NULL)
 			{
-				HeapFree(this->heap, 0, this->message);
-
-				size_t messageLength;
-				wchar_t* messageCopy = NULL;
-
-				if (heap != NULL && message != NULL)
-				{
-					messageLength = wcslen(message) + 1;
-					messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
-				}
-
-				if (messageCopy == NULL)
-				{
-					this->heap = NULL;
-					this->message = NULL;
-				}
-				else
-				{
-					wcsncpy_s(messageCopy, messageLength, message, messageLength);
-					this->heap = heap;
-					this->message = messageCopy;
-				}
+				messageLength = wcslen(message) + 1;
+				messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
 			}
+
+			if (messageCopy == NULL)
+			{
+				this->heap = NULL;
+				this->message = NULL;
+			}
+			else
+			{
+				wcsncpy_s(messageCopy, messageLength, message, messageLength);
+				this->heap = heap;
+				this->message = messageCopy;
+			}
+
+			return true;
 		}
 	};
 }
