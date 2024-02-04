@@ -42,7 +42,7 @@ namespace Matteaz
 			message(exception.message)
 		{
 			exception.heap = NULL;
-			exception.message = NULL;
+			exception.message = nullptr;
 		}
 
 		virtual ~Exception()
