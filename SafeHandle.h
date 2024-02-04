@@ -9,7 +9,6 @@ namespace Matteaz
 		HANDLE handle;
 
 	public:
-		/* One could use 'DuplicateHandle' to duplicate 'this->handle' and link it to a new instance of 'SafeHandle' */
 		SafeHandle(const SafeHandle&) = delete;
 		SafeHandle& operator = (const SafeHandle&) = delete;
 
@@ -22,7 +21,7 @@ namespace Matteaz
 		constexpr SafeHandle(SafeHandle&& safeHandle) noexcept :
 			handle(safeHandle.handle)
 		{
-
+			safeHandle.handle = INVALID_HANDLE_VALUE;
 		}
 
 		~SafeHandle()
@@ -48,8 +47,7 @@ namespace Matteaz
 			return handle;
 		}
 
-		[[nodiscard("The managed handle would be lost and never be closed")]]
-		constexpr HANDLE Release() noexcept
+		[[nodiscard]] constexpr HANDLE Release() noexcept
 		{
 			HANDLE handle = this->handle;
 
