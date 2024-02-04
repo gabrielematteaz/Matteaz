@@ -6,27 +6,27 @@ namespace Matteaz
 {
 	class Exception
 	{
-		HANDLE heap; /* Must be valid when allocating/deallocating 'this->message' */
+		HANDLE heap;
 		wchar_t* message;
 
 	public:
-		/* 'this->message' is not guaranteed to be a copy of 'message' */
-		explicit Exception(HANDLE heap = NULL, const wchar_t* message = NULL) noexcept :
+		explicit Exception(HANDLE heap = NULL, const wchar_t* message = nullptr) noexcept :
 			heap(NULL),
-			message(NULL)
+			message(nullptr)
 		{
-			if (message != NULL && heap != NULL)
+			if (heap != NULL && message != nullptr)
 			{
-				/* 'wcsnlen' is safer but there is no maximum length set ('wcsnlen_s' is useless
-				since we already know that 'message' is not NULL) */
 				size_t messageLength = wcslen(message) + 1;
 				wchar_t* messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
 
 				if (messageCopy != NULL)
 				{
-					wcsncpy_s(messageCopy, messageLength, message, messageLength);
-					this->heap = heap;
-					this->message = messageCopy;
+					if (wcsncpy_s(messageCopy, messageLength, message, messageLength) == 0)
+					{
+						this->heap = heap;
+						this->message = messageCopy;
+					}
+					else HeapFree(heap, 0, messageCopy);
 				}
 			}
 		}
@@ -49,35 +49,37 @@ namespace Matteaz
 		{
 			HeapFree(heap, 0, message);
 			heap = NULL;
-			message = NULL;
+			message = nullptr;
 		}
 
 		Exception& operator = (const Exception& exception) noexcept
 		{
-			/* Different instances have different messages (if not NULL) */
 			if (message != exception.message)
 			{
-				/* If both heap handles are equal, deallocating first will improve the probability
-				of success of the next allocation */
 				HeapFree(heap, 0, message);
 
 				size_t messageLength;
 				wchar_t* messageCopy = NULL;
 
-				if (exception.message != NULL)
+				if (exception.heap != NULL)
 				{
 					messageLength = wcslen(exception.message) + 1;
 					messageCopy = static_cast < wchar_t* > (HeapAlloc(exception.heap, 0, messageLength * sizeof(wchar_t)));
 				}
 
+				if (messageCopy != NULL && wcsncpy_s(messageCopy, messageLength, exception.message, messageLength) != 0)
+				{
+					HeapFree(exception.heap, 0, messageCopy);
+					messageCopy = NULL;
+				}
+
 				if (messageCopy == NULL)
 				{
 					heap = NULL;
-					message = NULL;
+					message = nullptr;
 				}
 				else
 				{
-					wcsncpy_s(messageCopy, messageLength, exception.message, messageLength);
 					heap = exception.heap;
 					message = messageCopy;
 				}
@@ -94,48 +96,50 @@ namespace Matteaz
 				heap = exception.heap;
 				message = exception.message;
 				exception.heap = NULL;
-				exception.message = NULL;
+				exception.message = nullptr;
 			}
 
 			return *this;
 		}
 
-		[[nodiscard]] constexpr HANDLE Get() const noexcept
+		[[nodiscard]] constexpr HANDLE Heap() const noexcept
 		{
 			return heap;
 		}
 
-		/* You can safely modify the content of the string returned by this function (without reallocating/deallocating
-		it though. If not NULL, the size of its buffer in characters is exactly 'wcslen(Message()) + 1') */
 		[[nodiscard]] constexpr virtual const wchar_t* Message() const noexcept
 		{
 			return message;
 		}
 
-		bool Reset(HANDLE heap = NULL, const wchar_t* message = NULL) noexcept
+		bool Reset(HANDLE heap = NULL, const wchar_t* message = nullptr) noexcept
 		{
-			/* messages are more likely to be different */
-			if (this->message == message && this->heap == heap) return this->message == NULL ? true : false;
+			if (this->heap == heap && this->message == message) return this->heap == NULL ? true : false;
 
 			HeapFree(this->heap, 0, this->message);
 
 			size_t messageLength;
 			wchar_t* messageCopy = NULL;
 
-			if (message != NULL && heap != NULL)
+			if (heap != NULL && message != nullptr)
 			{
 				messageLength = wcslen(message) + 1;
 				messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
 			}
 
+			if (messageCopy != NULL && wcsncpy_s(messageCopy, messageLength, message, messageLength) != 0)
+			{
+				HeapFree(heap, 0, messageCopy);
+				messageCopy = NULL;
+			}
+
 			if (messageCopy == NULL)
 			{
 				this->heap = NULL;
-				this->message = NULL;
+				this->message = nullptr;
 			}
 			else
 			{
-				wcsncpy_s(messageCopy, messageLength, message, messageLength);
 				this->heap = heap;
 				this->message = messageCopy;
 			}
