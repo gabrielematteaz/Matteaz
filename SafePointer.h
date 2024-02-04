@@ -167,8 +167,10 @@ namespace Matteaz
 				}
 
 				heap = safePointer.heap;
+				count = safePointer.count;
 				pointer = safePointer.pointer;
 				safePointer.heap = NULL;
+				safePointer.count = 0;
 				safePointer.pointer = nullptr;
 			}
 
@@ -215,7 +217,6 @@ namespace Matteaz
 			if (heap == NULL || count == 0 || pointer == nullptr)
 			{
 				this->heap = NULL;
-				this->count = 0;
 				this->pointer = nullptr;
 			}
 			else
