@@ -1,11 +1,34 @@
 #pragma once
 
-#include "Concepts.h"
-#include < Windows.h >
+#include < new >
+#include "Exception.h"
 
 namespace Matteaz
 {
-	template < NoExtentsDestructible Type >
+	class AllocationError : private Exception
+	{
+	public:
+		AllocationError() = delete;
+		AllocationError(const AllocationError&) noexcept = default;
+		constexpr AllocationError(AllocationError&) noexcept = default;
+		virtual ~AllocationError() = default;
+		AllocationError& operator = (const AllocationError&) noexcept = default;
+		AllocationError& operator = (AllocationError&&) noexcept = default;
+
+		HANDLE heap;
+		SIZE_T bytes;
+
+		AllocationError(HANDLE heap, SIZE_T bytes) noexcept :
+			Exception(),
+			heap(heap),
+			bytes(bytes)
+		{
+
+		}
+	};
+
+	template < typename Type >
+		requires (std::is_nothrow_destructible_v < Type > == true)
 	class SafePointer
 	{
 		HANDLE heap;
@@ -15,11 +38,11 @@ namespace Matteaz
 		SafePointer(const SafePointer&) = delete;
 		SafePointer& operator = (const SafePointer&) = delete;
 
-		constexpr SafePointer(HANDLE heap = NULL, Type* pointer = nullptr) noexcept :
-			heap(heap),
-			pointer(pointer)
+		constexpr explicit SafePointer(HANDLE heap = NULL, Type* pointer = NULL) noexcept :
+			heap(NULL),
+			pointer(NULL)
 		{
-			if (heap != NULL && pointer != nullptr)
+			if (heap != NULL && pointer != NULL)
 			{
 				this->heap = heap;
 				this->pointer = pointer;
@@ -31,25 +54,25 @@ namespace Matteaz
 			pointer(safePointer.pointer)
 		{
 			safePointer.heap = NULL;
-			safePointer.pointer = nullptr;
+			safePointer.pointer = NULL;
 		}
 
 		~SafePointer()
 		{
-			if (pointer != nullptr)
+			if (heap != NULL)
 			{
 				pointer->~Type();
 				HeapFree(heap, 0, static_cast < LPVOID > (pointer));
 				heap = NULL;
-				pointer = nullptr;
+				pointer = NULL;
 			}
 		}
 
-		SafePointer& operator = (SafePointer&& safePointer) noexcept
+		SafePointer& operator = (SafePointer&& safePointer)
 		{
-			if (pointer != safePointer.pointer)
+			if (this != &safePointer)
 			{
-				if (pointer != nullptr)
+				if (heap != NULL)
 				{
 					pointer->~Type();
 					HeapFree(heap, 0, static_cast < LPVOID > (pointer));
@@ -58,7 +81,7 @@ namespace Matteaz
 				heap = safePointer.heap;
 				pointer = safePointer.pointer;
 				safePointer.heap = NULL;
-				safePointer.pointer = nullptr;
+				safePointer.pointer = NULL;
 			}
 
 			return *this;
@@ -79,25 +102,25 @@ namespace Matteaz
 			Type* pointer = this->pointer;
 
 			heap = NULL;
-			this->pointer = nullptr;
+			this->pointer = NULL;
 
 			return pointer;
 		}
 
-		bool Reset(HANDLE heap = NULL, Type* pointer = nullptr) noexcept
+		bool Reset(HANDLE heap = NULL, Type* pointer = NULL) noexcept
 		{
-			if (this->pointer == pointer) return this->heap == NULL ? true : false;
+			if (this->heap == heap) return this->heap == NULL ? true : false;
 
-			if (this->pointer != nullptr)
+			if (this->heap != NULL)
 			{
 				this->pointer->~Type();
 				HeapFree(this->heap, 0, static_cast < LPVOID > (this->pointer));
 			}
 
-			if (heap == NULL || pointer == nullptr)
+			if (heap == NULL || pointer == NULL)
 			{
 				this->heap = NULL;
-				this->pointer = nullptr;
+				this->pointer = NULL;
 			}
 			else
 			{
@@ -110,68 +133,114 @@ namespace Matteaz
 	};
 
 	template < typename Type >
-	class SafePointer < Type[] >
+		requires (std::is_nothrow_destructible_v < Type > == true)
+	class SharedSafePointer
 	{
 		HANDLE heap;
-		SIZE_T count;
 		Type* pointer;
+		std::size_t* references;
 
 	public:
-		SafePointer(const SafePointer&) = delete;
-		SafePointer& operator = (const SafePointer&) = delete;
-
-		constexpr SafePointer(HANDLE heap = NULL, SIZE_T count = 0, Type* pointer = nullptr) noexcept :
+		explicit SharedSafePointer(HANDLE heap = NULL, Type* pointer = NULL) :
 			heap(NULL),
-			count(0),
-			pointer(nullptr)
+			pointer(NULL),
+			references(NULL)
 		{
-			if (heap != NULL && count != 0 && pointer != nullptr)
+			if (heap != NULL && pointer != NULL)
 			{
 				this->heap = heap;
-				this->count = count;
 				this->pointer = pointer;
+				references = static_cast < std::size_t* > (HeapAlloc(heap, 0, sizeof(std::size_t)));
+
+				if (references == NULL) throw AllocationError(heap, sizeof(std::size_t));
+
+				*references = 1;
 			}
 		}
 
-		constexpr SafePointer(SafePointer&& safePointer) noexcept :
-			heap(safePointer.heap),
-			count(safePointer.count),
-			pointer(safePointer.pointer)
+		constexpr SharedSafePointer(const SharedSafePointer& sharedSafePointer) noexcept :
+			heap(sharedSafePointer.heap),
+			pointer(sharedSafePointer.pointer),
+			references(sharedSafePointer.references)
 		{
-			safePointer.heap = NULL;
-			safePointer.count = 0;
-			safePointer.pointer = nullptr;
+			(*references)++;
 		}
 
-		~SafePointer()
+		constexpr SharedSafePointer(SharedSafePointer&& sharedSafePointer) noexcept :
+			heap(sharedSafePointer.heap),
+			pointer(sharedSafePointer.pointer),
+			references(sharedSafePointer.references)
 		{
-			if (pointer != nullptr)
-			{
-				for (Type* pointer = this->pointer; count != 0; count--, pointer++) pointer->~Type();
-
-				HeapFree(heap, 0, static_cast < LPVOID > (pointer));
-				heap = NULL;
-				pointer = nullptr;
-			}
+			sharedSafePointer.heap = NULL;
+			sharedSafePointer.pointer = NULL;
+			sharedSafePointer.references = NULL;
 		}
 
-		SafePointer& operator = (SafePointer&& safePointer) noexcept
+		~SharedSafePointer()
 		{
-			if (pointer != safePointer.pointer)
+			if (heap != NULL)
 			{
-				if (pointer != nullptr)
+				(*references)--;
+
+				if (*references == 0)
 				{
-					for (Type* pointer = this->pointer; count != 0; count--, pointer++) pointer->~Type();
-
+					pointer->~Type();
 					HeapFree(heap, 0, static_cast < LPVOID > (pointer));
+					HeapFree(heap, 0, references);
+					heap = NULL;
+					pointer = NULL;
+					references = NULL;
+				}
+			}
+		}
+
+		SharedSafePointer& operator = (const SharedSafePointer& sharedSafePointer) noexcept
+		{
+			if (this != &sharedSafePointer)
+			{
+				if (heap != NULL)
+				{
+					(*references)--;
+
+					if (*references == 0)
+					{
+						pointer->~Type();
+						HeapFree(heap, 0, static_cast < LPVOID > (pointer));
+						HeapFree(heap, 0, references);
+					}
 				}
 
-				heap = safePointer.heap;
-				count = safePointer.count;
-				pointer = safePointer.pointer;
-				safePointer.heap = NULL;
-				safePointer.count = 0;
-				safePointer.pointer = nullptr;
+				heap = sharedSafePointer.heap;
+				pointer = sharedSafePointer.pointer;
+				references = sharedSafePointer.references;
+				(*references)++;
+			}
+
+			return *this;
+		}
+
+		SharedSafePointer& operator = (SharedSafePointer&& sharedSafePointer) noexcept
+		{
+			if (this != &sharedSafePointer)
+			{
+				if (heap != NULL)
+				{
+					(*references)--;
+
+					if (*references == 0)
+					{
+						pointer->~Type();
+						HeapFree(heap, 0, static_cast < LPVOID > (pointer));
+						HeapFree(heap, 0, references);
+					}
+				}
+
+				heap = sharedSafePointer.heap;
+				pointer = sharedSafePointer.pointer;
+				references = sharedSafePointer.references;
+				sharedSafePointer.heap = NULL;
+				sharedSafePointer.pointer = NULL;
+				sharedSafePointer.references = NULL;
 			}
 
 			return *this;
@@ -182,9 +251,9 @@ namespace Matteaz
 			return heap;
 		}
 
-		[[nodiscard]] constexpr SIZE_T Count() const noexcept
+		[[nodiscard]] constexpr std::size_t References() const noexcept
 		{
-			return count;
+			return *references;
 		}
 
 		[[nodiscard]] constexpr Type* Get() const noexcept
@@ -192,41 +261,128 @@ namespace Matteaz
 			return pointer;
 		}
 
-		[[nodiscard]] constexpr Type* Release() noexcept
+		[[nodiscard]] Type* Release() noexcept
 		{
 			Type* pointer = this->pointer;
 
 			heap = NULL;
-			count = 0;
-			this->pointer = nullptr;
+			this->pointer = NULL;
+			(*references)--;
+
+			if (*references == 0) HeapFree(heap, 0, references);
+
+			references = NULL;
 
 			return pointer;
 		}
 
-		bool Reset(HANDLE heap = NULL, SIZE_T count = 0, Type* pointer = nullptr) noexcept
+		bool Reset(HANDLE heap = NULL, Type* pointer = NULL)
 		{
 			if (this->pointer == pointer) return this->heap == NULL ? true : false;
 
-			if (this->pointer != nullptr)
+			if (heap != NULL)
 			{
-				for (Type* pointerCopy = this->pointer; this->count != 0; this->count--, pointerCopy++) pointerCopy->~Type();
+				(*references)--;
 
-				HeapFree(this->heap, 0, static_cast < LPVOID > (this->pointer));
+				if (*references == 0)
+				{
+					this->pointer->~Type();
+					HeapFree(this->heap, 0, static_cast < LPVOID > (this->pointer));
+					HeapFree(this->heap, 0, references);
+				}
 			}
 
-			if (heap == NULL || count == 0 || pointer == nullptr)
+			if (heap == NULL || pointer == NULL)
 			{
 				this->heap = NULL;
-				this->pointer = nullptr;
+				this->pointer = NULL;
+				references = NULL;
 			}
 			else
 			{
+				references = static_cast < std::size_t* > (HeapAlloc(heap, 0, sizeof(std::size_t)));
+
+				if (references == NULL)
+				{
+					this->heap = NULL;
+					this->pointer = NULL;
+
+					throw AllocationError(heap, sizeof(std::size_t));
+				}
+
 				this->heap = heap;
-				this->count = count;
 				this->pointer = pointer;
+				*references = 1;
 			}
 
 			return true;
 		}
 	};
+
+	template < typename Type, typename... ConstructorArguments >
+		requires (std::is_nothrow_constructible_v < Type, ConstructorArguments... > == true || (std::is_constructible_v < Type, ConstructorArguments... > == true && std::is_nothrow_destructible_v < Type > == true))
+	SafePointer < Type > MakeSafePointer(HANDLE heap, ConstructorArguments&&... constructorArguments)
+	{
+		Type* pointer = static_cast < Type* > (HeapAlloc(heap, 0, sizeof(Type)));
+
+		if (pointer == NULL) throw AllocationError(heap, sizeof(Type));
+
+		if constexpr (std::is_nothrow_constructible_v < Type, ConstructorArguments... > == true)
+		{
+			new(pointer) Type(std::forward < ConstructorArguments > (constructorArguments)...);
+		}
+		else
+		{
+			try
+			{
+				new(pointer) Type(std::forward < ConstructorArguments > (constructorArguments)...);
+			}
+			catch (...)
+			{
+				HeapFree(heap, 0, static_cast < LPVOID > (pointer));
+
+				throw;
+			}
+		}
+
+		return SafePointer(heap, pointer);
+	}
+
+	template < typename Type, typename... ConstructorArguments >
+		requires (std::is_nothrow_constructible_v < Type, ConstructorArguments... > == true || (std::is_constructible_v < Type, ConstructorArguments... > == true && std::is_nothrow_destructible_v < Type > == true))
+	SharedSafePointer < Type > MakeSharedSafePointer(HANDLE heap, ConstructorArguments&&... constructorArguments)
+	{
+		Type* pointer = static_cast < Type* > (HeapAlloc(heap, 0, sizeof(Type)));
+
+		if (pointer == NULL) throw AllocationError(heap, sizeof(Type));
+
+		if constexpr (std::is_nothrow_constructible_v < Type, ConstructorArguments... > == true)
+		{
+			new(pointer) Type(std::forward < ConstructorArguments > (constructorArguments)...);
+		}
+		else
+		{
+			try
+			{
+				new(pointer) Type(std::forward < ConstructorArguments > (constructorArguments)...);
+			}
+			catch (...)
+			{
+				HeapFree(heap, 0, static_cast < LPVOID > (pointer));
+
+				throw;
+			}
+		}
+
+		try
+		{
+			return SharedSafePointer(heap, pointer);
+		}
+		catch (const AllocationError&)
+		{
+			HeapFree(heap, 0, static_cast < LPVOID > (pointer));
+
+			throw;
+		}
+	}
 }
