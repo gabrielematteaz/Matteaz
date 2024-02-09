@@ -6,7 +6,7 @@ namespace Matteaz
 		heap(NULL),
 		message(NULL)
 	{
-		if (heap != NULL && message != NULL)
+		if (heap != NULL && message != nullptr)
 		{
 			size_t messageLength = wcslen(message) + 1;
 			wchar_t* messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
@@ -23,11 +23,24 @@ namespace Matteaz
 		}
 	}
 
+	Exception::Exception(const Exception& exception) noexcept :
+		Exception(exception.heap, exception.message)
+	{
+
+	}
+
+	Exception::~Exception() noexcept
+	{
+		HeapFree(heap, 0, message);
+		heap = NULL;
+		message = NULL;
+	}
+
 	Exception& Exception::operator = (const Exception& exception) noexcept
 	{
 		if (this != &exception)
 		{
-			HeapFree(heap, 0, message);
+			this->~Exception();
 
 			size_t messageLength;
 			wchar_t* messageCopy = NULL;
@@ -44,12 +57,7 @@ namespace Matteaz
 				messageCopy = NULL;
 			}
 
-			if (messageCopy == NULL)
-			{
-				heap = NULL;
-				message = NULL;
-			}
-			else
+			if (messageCopy != NULL)
 			{
 				heap = exception.heap;
 				message = messageCopy;
@@ -59,16 +67,30 @@ namespace Matteaz
 		return *this;
 	}
 
+	Exception& Exception::operator = (Exception&& exception) noexcept
+	{
+		if (this != &exception)
+		{
+			this->~Exception();
+			heap = exception.heap;
+			message = exception.message;
+			exception.heap = NULL;
+			exception.message = NULL;
+		}
+
+		return *this;
+	}
+
 	bool Exception::Reset(HANDLE heap, const wchar_t* message) noexcept
 	{
 		if (this->message == message) return this->heap == NULL ? true : false;
 
-		HeapFree(this->heap, 0, this->message);
+		this->~Exception();
 
 		size_t messageLength;
 		wchar_t* messageCopy = NULL;
 
-		if (heap != NULL && message != NULL)
+		if (heap != NULL)
 		{
 			messageLength = wcslen(message) + 1;
 			messageCopy = static_cast < wchar_t* > (HeapAlloc(heap, 0, messageLength * sizeof(wchar_t)));
@@ -80,17 +102,12 @@ namespace Matteaz
 			messageCopy = NULL;
 		}
 
-		if (messageCopy == NULL)
-		{
-			this->heap = NULL;
-			this->message = NULL;
-		}
-		else
+		if (messageCopy != NULL)
 		{
 			this->heap = heap;
 			this->message = messageCopy;
 		}
 
-		return true;
+		return false;
 	}
 }

@@ -10,15 +10,12 @@ namespace Matteaz
 		wchar_t* message;
 
 	public:
-		explicit Exception(HANDLE heap = NULL, const wchar_t* message = NULL) noexcept;
+		explicit Exception(HANDLE heap = NULL, const wchar_t* message = nullptr) noexcept;
+		Exception(const Exception& exception) noexcept;
+		virtual ~Exception() noexcept;
 		Exception& operator = (const Exception& exception) noexcept;
-		bool Reset(HANDLE heap = NULL, const wchar_t* message = NULL) noexcept;
-
-		Exception(const Exception& exception) noexcept :
-			Exception(exception.heap, exception.message)
-		{
-
-		}
+		Exception& operator = (Exception&& exception) noexcept;
+		bool Reset(HANDLE heap = NULL, const wchar_t* message = nullptr) noexcept;
 
 		constexpr Exception(Exception&& exception) noexcept :
 			heap(exception.heap),
@@ -26,27 +23,6 @@ namespace Matteaz
 		{
 			exception.heap = NULL;
 			exception.message = NULL;
-		}
-
-		virtual ~Exception()
-		{
-			HeapFree(heap, 0, message);
-			heap = NULL;
-			message = NULL;
-		}
-
-		Exception& operator = (Exception&& exception) noexcept
-		{
-			if (this != &exception)
-			{
-				HeapFree(heap, 0, message);
-				heap = exception.heap;
-				message = exception.message;
-				exception.heap = NULL;
-				exception.message = NULL;
-			}
-
-			return *this;
 		}
 
 		[[nodiscard]] constexpr HANDLE Heap() const noexcept
