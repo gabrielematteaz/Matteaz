@@ -9,61 +9,68 @@ namespace Matteaz
 		HANDLE handle;
 
 	public:
+		constexpr explicit SafeHandle(HANDLE handle = INVALID_HANDLE_VALUE) noexcept;
 		SafeHandle(const SafeHandle&) = delete;
+		constexpr SafeHandle(SafeHandle&& safeHandle) noexcept;
+		~SafeHandle() noexcept;
 		SafeHandle& operator = (const SafeHandle&) = delete;
+		SafeHandle& operator = (SafeHandle&& safeHandle) noexcept;
+		[[nodiscard]] constexpr HANDLE Get() const noexcept;
+		[[nodiscard]] constexpr HANDLE Release() noexcept;
+		bool Reset(HANDLE handle = INVALID_HANDLE_VALUE) noexcept;
+	};
 
-		constexpr explicit SafeHandle(HANDLE handle = INVALID_HANDLE_VALUE) noexcept :
-			handle(handle)
+	constexpr SafeHandle::SafeHandle(HANDLE handle) noexcept :
+		handle(handle)
+	{
+
+	}
+
+	constexpr SafeHandle::SafeHandle(SafeHandle&& safeHandle) noexcept :
+		handle(safeHandle.handle)
+	{
+
+	}
+
+	SafeHandle::~SafeHandle() noexcept
+	{
+		CloseHandle(handle);
+		handle = INVALID_HANDLE_VALUE;
+	}
+
+	SafeHandle& SafeHandle::operator = (SafeHandle&& safeHandle) noexcept
+	{
+		if (this != &safeHandle)
 		{
-
-		}
-
-		constexpr SafeHandle(SafeHandle&& safeHandle) noexcept :
-			handle(safeHandle.handle)
-		{
+			this->~SafeHandle();
+			handle = safeHandle.handle;
 			safeHandle.handle = INVALID_HANDLE_VALUE;
 		}
 
-		~SafeHandle()
-		{
-			CloseHandle(handle);
-			handle = INVALID_HANDLE_VALUE;
-		}
+		return *this;
+	}
 
-		SafeHandle& operator = (SafeHandle&& safeHandle) noexcept
-		{
-			if (handle != safeHandle.handle)
-			{
-				CloseHandle(handle);
-				handle = safeHandle.handle;
-				safeHandle.handle = INVALID_HANDLE_VALUE;
-			}
+	constexpr HANDLE SafeHandle::Get() const noexcept
+	{
+		return handle;
+	}
 
-			return *this;
-		}
+	constexpr HANDLE SafeHandle::Release() noexcept
+	{
+		HANDLE handle = this->handle;
 
-		[[nodiscard]] constexpr HANDLE Get() const noexcept
-		{
-			return handle;
-		}
+		this->handle = INVALID_HANDLE_VALUE;
 
-		[[nodiscard]] constexpr HANDLE Release() noexcept
-		{
-			HANDLE handle = this->handle;
+		return handle;
+	}
 
-			this->handle = INVALID_HANDLE_VALUE;
+	bool SafeHandle::Reset(HANDLE handle) noexcept
+	{
+		if (this->handle == handle) return this->handle == INVALID_HANDLE_VALUE ? true : false;
 
-			return handle;
-		}
+		this->~SafeHandle();
+		this->handle = handle;
 
-		bool Reset(HANDLE handle = INVALID_HANDLE_VALUE) noexcept
-		{
-			if (this->handle == handle) return this->handle == INVALID_HANDLE_VALUE ? true : false;
-
-			CloseHandle(this->handle);
-			this->handle = handle;
-
-			return true;
-		}
-	};
+		return false;
+	}
 }
