@@ -4,14 +4,21 @@
 
 namespace matteaz
 {
-	class locker
+	class mutex
 	{
-		SRWLOCK &lock_;
+		SRWLOCK lock_;
 
 	public:
-		locker(SRWLOCK &lock) noexcept;
-		locker(const locker&) = delete;
-		~locker();
-		locker &operator = (const locker&) = delete;
+		mutex(const mutex&) = delete;
+		mutex &operator = (const mutex&) = delete;
+		void lock() noexcept;
+		void unlock() noexcept;
+		bool try_lock() noexcept;
+
+		constexpr mutex() noexcept :
+			lock_ SRWLOCK_INIT
+		{
+
+		}
 	};
 }
