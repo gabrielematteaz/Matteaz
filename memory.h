@@ -67,27 +67,29 @@ namespace matteaz
 		return left.heap() == right.heap();
 	}
 
-	template < typename type_, template < typename type_ > typename allocator_type_ = allocator >
+	template < typename allocator_type_ >
 	class shared_memory_resource
 	{
-		using type_allocator_traits = std::allocator_traits < allocator_type_ < type_ > >;
-		using size_allocator_traits = std::allocator_traits < allocator_type_ < std::size_t > >;
+		using type_allocator_type = allocator_type_;
+		using size_allocator_type = std::allocator_traits < allocator_type_ >::template rebind_alloc < std::size_t >;
+		using type_allocator_traits = std::allocator_traits < type_allocator_type >;
+		using size_allocator_traits = std::allocator_traits < size_allocator_type >;
 
-		allocator_type_ < type_ > allocator_;
+		type_allocator_type allocator_;
 		size_allocator_traits::pointer references_;
 		type_allocator_traits::pointer pointer_;
 
 	public:
 		template < typename... parameters_type_ >
-		constexpr explicit shared_memory_resource(const allocator_type_ < type_ > &allocator = allocator_type_ < type_ > (), parameters_type_&&... parameters) :
+		constexpr explicit shared_memory_resource(const allocator_type_ &allocator = allocator_type_(), parameters_type_&&... parameters) :
 			allocator_(allocator), references_(nullptr), pointer_(nullptr)
 		{
-			allocator_type_ < std::size_t > size_allocator(allocator);
+			size_allocator_type size_allocator(allocator);
 
 			try {
 				references_ = size_allocator_traits::allocate(size_allocator, 1);
 				pointer_ = type_allocator_traits::allocate(allocator_, 1);
-				new(pointer_) type_(std::forward < parameters_type_ > (parameters)...);
+				new(pointer_) type_allocator_traits::value_type(std::forward < parameters_type_ > (parameters)...);
 				*references_ = 1;
 			} catch (...) {
 				size_allocator_traits::deallocate(size_allocator, references_, 1);
@@ -118,7 +120,7 @@ namespace matteaz
 			--*references_;
 
 			if (*references_ == 0) {
-				allocator_type_ < std::size_t > size_allocator(allocator_);
+				size_allocator_type size_allocator(allocator_);
 
 				type_allocator_traits::deallocate(allocator_, pointer_, 1);
 				size_allocator_traits::deallocate(size_allocator, references_, 1);
@@ -165,12 +167,12 @@ namespace matteaz
 			return pointer_ == nullptr ? throw exception(L"tried to access a member of a null shared memory resource") : pointer_;
 		}
 
-		[[nodiscard]] constexpr type_ &operator * () const
+		[[nodiscard]] constexpr type_allocator_traits::value_type &operator * () const
 		{
 			return pointer_ == nullptr ? throw exception(L"tried to dereference a null shared memory resource") : *pointer_;
 		}
 
-		[[nodiscard]] constexpr allocator_type_ < type_ > allocator() const noexcept
+		[[nodiscard]] constexpr type_allocator_type allocator() const noexcept
 		{
 			return allocator_;
 		}
@@ -200,8 +202,8 @@ namespace matteaz
 		}
 	};
 
-	template < typename type_, template < typename type_ > typename allocator_type_ >
-	[[nodiscard]] constexpr bool operator == (const shared_memory_resource < type_, allocator_type_ > &left, const shared_memory_resource < type_, allocator_type_ > &right) noexcept
+	template < typename allocator_type_ >
+	[[nodiscard]] constexpr bool operator == (const shared_memory_resource < allocator_type_ > &left, const shared_memory_resource < allocator_type_ > &right) noexcept
 	{
 		return left.get() == right.get();
 	}
@@ -209,12 +211,12 @@ namespace matteaz
 
 namespace std
 {
-	template < typename type_, template < typename type_ > typename allocator_type_ >
-	struct hash < matteaz::shared_memory_resource < type_, allocator_type_ > >
+	template < typename allocator_type_ >
+	struct hash < matteaz::shared_memory_resource < allocator_type_ > >
 	{
-		[[nodiscard]] std::size_t operator () (const matteaz::shared_memory_resource < type_, allocator_type_ > &shared_memory_resource) const noexcept
+		[[nodiscard]] std::size_t operator () (const matteaz::shared_memory_resource < allocator_type_ > &shared_memory_resource) const noexcept
 		{
-			return std::hash < type_* > {} (shared_memory_resource.get());
+			return std::hash < decltype(shared_memory_resource.get()) > {} (shared_memory_resource.get());
 		}
 	};
 }

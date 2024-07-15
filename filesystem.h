@@ -8,18 +8,26 @@
 
 namespace matteaz
 {
-	template < template < typename type_ > typename allocator_type_ = allocator >
+	template < typename allocator_type_ >
 	class directory_iterator
 	{
-		struct _state
+		struct state
 		{
 			HANDLE find_file_;
 			WIN32_FIND_DATAW find_data_;
 		};
 
-		struct sentinel { };
+		struct sentinel
+		{
+			[[nodiscard]] constexpr bool operator == (const directory_iterator &directory_iterator) const noexcept
+			{
+				return INVALID_HANDLE_VALUE == directory_iterator.state_.get()->find_file_;
+			}
+		};
 
-		shared_memory_resource < _state, allocator_type_ > state_;
+		using state_allocator_type = std::allocator_traits < allocator_type_ >::template rebind_alloc < state >;
+
+		shared_memory_resource < state_allocator_type > state_;
 
 	public:
 		using value_type = WIN32_FIND_DATAW;
@@ -30,7 +38,7 @@ namespace matteaz
 		directory_iterator &operator = (const directory_iterator&) = default;
 		directory_iterator &operator = (directory_iterator&&) = default;
 
-		constexpr directory_iterator(const wchar_t *path = nullptr, const allocator_type_ < _state > &allocator = allocator_type_ < _state > ()) :
+		constexpr directory_iterator(const wchar_t *path = nullptr, const allocator_type_ &allocator = allocator_type_()) :
 			state_(allocator, INVALID_HANDLE_VALUE)
 		{
 			if (path == nullptr) return;
@@ -61,7 +69,7 @@ namespace matteaz
 			if (state_.references() == 1) FindClose(state_.get()->find_file_);
 		}
 
-		[[deprecated("Unachievable in this implementation. It does nothing")]]
+		[[deprecated("Unachievable in this implementation")]]
 		constexpr void operator ++ (int) const noexcept
 		{
 
