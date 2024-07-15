@@ -125,7 +125,7 @@ namespace matteaz
 	{
 		HRESULT code_;
 
-		constexpr explicit HRESULT_error(HRESULT code, const wchar_t *message = nullptr, HANDLE heap = nullptr) noexcept :
+		constexpr explicit HRESULT_error(HRESULT code, const wchar_t *message = nullptr, HANDLE heap = NULL) noexcept :
 			exception(message, heap), code_(code)
 		{
 		
