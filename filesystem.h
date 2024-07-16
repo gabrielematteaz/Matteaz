@@ -2,6 +2,7 @@
 
 #include < Windows.h >
 #include < PathCch.h >
+
 #include "memory.h"
 
 #pragma comment(lib, "Pathcch.lib")
@@ -11,48 +12,31 @@ namespace matteaz
 	template < typename allocator_type_ >
 	class directory_iterator
 	{
-		struct state
+		struct _state
 		{
 			HANDLE find_file_;
 			WIN32_FIND_DATAW find_data_;
 		};
 
-		struct sentinel
-		{
-			[[nodiscard]] constexpr bool operator == (const directory_iterator &directory_iterator) const noexcept
-			{
-				return INVALID_HANDLE_VALUE == directory_iterator.state_.get()->find_file_;
-			}
-		};
-
-		using state_allocator_type = std::allocator_traits < allocator_type_ >::template rebind_alloc < state >;
-
-		shared_memory_resource < state_allocator_type > state_;
+		shared_memory_resource < typename std::allocator_traits < allocator_type_ >::template rebind_alloc < _state > > state_;
 
 	public:
+		struct sentinel { };
+
 		using value_type = WIN32_FIND_DATAW;
 		using difference_type = std::ptrdiff_t;
+		using reference = WIN32_FIND_DATAW&;
+		using pointer = WIN32_FIND_DATA*;
+		using iterator_category = std::input_iterator_tag;
 
 		directory_iterator(const directory_iterator&) = default;
 		directory_iterator(directory_iterator&&) = default;
 		directory_iterator &operator = (const directory_iterator&) = default;
 		directory_iterator &operator = (directory_iterator&&) = default;
 
-		constexpr directory_iterator(const wchar_t *path = nullptr, const allocator_type_ &allocator = allocator_type_()) :
+		explicit directory_iterator(const wchar_t *path, const allocator_type_ &allocator = allocator_type_()) :
 			state_(allocator, INVALID_HANDLE_VALUE)
 		{
-			if (path == nullptr) return;
-
-			//std::basic_string < wchar_t, std::char_traits < wchar_t >, matteaz::allocator < wchar_t > > file_name(path, allocator);
-
-			//file_name.append(L"\\*");
-
-			//if (file_name.length() > MAX_PATH && !file_name.starts_with(L"\\\\?\\")) file_name.insert(0, L"\\\\?\\");
-
-			//auto state = state_.get();
-
-			//state->find_file_ = FindFirstFileW(file_name.c_str(), &state->find_data_);
-
 			wchar_t *file_name;
 			auto result = PathAllocCombine(path, L"*", PATHCCH_ALLOW_LONG_PATHS, &file_name);
 
@@ -80,7 +64,7 @@ namespace matteaz
 			return state_.get()->find_file_ != INVALID_HANDLE_VALUE;
 		}
 
-		[[nodiscard]] constexpr WIN32_FIND_DATAW *operator -> () const noexcept
+		[[nodiscard]] constexpr pointer operator -> () const noexcept
 		{
 			return &state_.get()->find_data_;
 		}
@@ -97,7 +81,7 @@ namespace matteaz
 			return *this;
 		}
 
-		[[nodiscard]] constexpr WIN32_FIND_DATAW &operator * () const noexcept
+		[[nodiscard]] constexpr reference operator * () const noexcept
 		{
 			return state_.get()->find_data_;
 		}
@@ -107,17 +91,17 @@ namespace matteaz
 			return state_.get()->find_file_ == INVALID_HANDLE_VALUE;
 		}
 
-		constexpr directory_iterator begin() const noexcept
+		[[nodiscard]] constexpr directory_iterator begin() const noexcept
 		{
 			return *this;
 		}
 
-		constexpr sentinel end() const noexcept
+		[[nodiscard]] constexpr sentinel end() const noexcept
 		{
 			return { };
 		}
 
-		friend constexpr void swap(directory_iterator &left, directory_iterator &right) noexcept
+		friend constexpr void swap(directory_iterator < allocator_type_ > &left, directory_iterator < allocator_type_ > &right) noexcept
 		{
 			swap(left.state_, right.state_);
 		}

@@ -10,9 +10,7 @@ namespace matteaz
 		SIZE_T bytes_;
 
 		constexpr explicit allocation_error(HANDLE heap, SIZE_T bytes) noexcept :
-			exception(L"matteaz::allocation_error"),
-			heap_(heap),
-			bytes_(bytes)
+			exception(L"matteaz::allocation_error"), heap_(heap), bytes_(bytes)
 		{
 
 		}
@@ -47,15 +45,15 @@ namespace matteaz
 			return heap_;
 		}
 
-		[[nodiscard]] type_ *allocate(std::size_t count) const
+		[[nodiscard]] value_type *allocate(std::size_t count) const
 		{
-			auto bytes = count * sizeof(type_);
-			auto pointer = static_cast < type_* > (HeapAlloc(heap_, 0, bytes));
+			auto bytes = count * sizeof(value_type);
+			auto pointer = static_cast < value_type* > (HeapAlloc(heap_, 0, bytes));
 
 			return pointer == nullptr ? throw allocation_error(heap_, bytes) : pointer;
 		}
 
-		void deallocate(type_ *pointer, std::size_t) const noexcept
+		void deallocate(value_type *pointer, std::size_t) const noexcept
 		{
 			HeapFree(heap_, 0, pointer);
 		}
@@ -68,34 +66,43 @@ namespace matteaz
 	}
 
 	template < typename allocator_type_ >
+	requires std::is_nothrow_destructible_v < typename allocator_type_::value_type >
 	class shared_memory_resource
 	{
-		using type_allocator_type = allocator_type_;
-		using size_allocator_type = std::allocator_traits < allocator_type_ >::template rebind_alloc < std::size_t >;
-		using type_allocator_traits = std::allocator_traits < type_allocator_type >;
+		using allocator_traits = std::allocator_traits < allocator_type_ >;
+		using size_allocator_type = allocator_traits::template rebind_alloc < std::size_t >;
 		using size_allocator_traits = std::allocator_traits < size_allocator_type >;
 
-		type_allocator_type allocator_;
+		allocator_type_ allocator_;
 		size_allocator_traits::pointer references_;
-		type_allocator_traits::pointer pointer_;
+		allocator_traits::pointer pointer_;
 
 	public:
+		using element_type = allocator_type_::value_type;
+		using allocator_type = allocator_type_;
+
 		template < typename... parameters_type_ >
-		constexpr explicit shared_memory_resource(const allocator_type_ &allocator = allocator_type_(), parameters_type_&&... parameters) :
+		requires std::is_constructible_v < element_type, parameters_type_... >
+		explicit shared_memory_resource(const allocator_type &allocator = allocator_type(), parameters_type_&&... parameters) :
 			allocator_(allocator), references_(nullptr), pointer_(nullptr)
 		{
 			size_allocator_type size_allocator(allocator);
+			typename size_allocator_traits::pointer references = nullptr;
+			typename allocator_traits::pointer pointer = nullptr;
 
 			try {
-				references_ = size_allocator_traits::allocate(size_allocator, 1);
-				pointer_ = type_allocator_traits::allocate(allocator_, 1);
-				new(pointer_) type_allocator_traits::value_type(std::forward < parameters_type_ > (parameters)...);
-				*references_ = 1;
+				references = size_allocator_traits::allocate(size_allocator, 1);
+				*references = 1;
+				pointer = allocator_traits::allocate(allocator_, 1);
+				new(pointer) element_type(std::forward < parameters_type_ > (parameters)...);
 			} catch (...) {
-				size_allocator_traits::deallocate(size_allocator, references_, 1);
-				type_allocator_traits::deallocate(allocator_, pointer_, 1);
+				size_allocator_traits::deallocate(size_allocator, references, 1);
+				allocator_traits::deallocate(allocator_, pointer, 1);
 				throw;
 			}
+
+			references_ = references;
+			pointer_ = pointer;
 		}
 
 		constexpr shared_memory_resource(const shared_memory_resource &other) noexcept :
@@ -120,10 +127,12 @@ namespace matteaz
 			--*references_;
 
 			if (*references_ == 0) {
-				size_allocator_type size_allocator(allocator_);
+				size_allocator_type allocator(allocator_);
 
-				type_allocator_traits::deallocate(allocator_, pointer_, 1);
-				size_allocator_traits::deallocate(size_allocator, references_, 1);
+				if constexpr (!std::is_trivially_destructible_v < element_type >) pointer_->~element_type();
+
+				size_allocator_traits::deallocate(allocator, references_, 1);
+				allocator_traits::deallocate(allocator_, pointer_, 1);
 			}
 		}
 
@@ -162,17 +171,17 @@ namespace matteaz
 			return pointer_ != nullptr;
 		}
 
-		[[nodiscard]] constexpr type_allocator_traits::pointer operator -> () const
+		[[nodiscard]] constexpr allocator_traits::pointer operator -> () const
 		{
 			return pointer_ == nullptr ? throw exception(L"tried to access a member of a null shared memory resource") : pointer_;
 		}
 
-		[[nodiscard]] constexpr type_allocator_traits::value_type &operator * () const
+		[[nodiscard]] constexpr decltype(*pointer_) operator * () const
 		{
 			return pointer_ == nullptr ? throw exception(L"tried to dereference a null shared memory resource") : *pointer_;
 		}
 
-		[[nodiscard]] constexpr type_allocator_type allocator() const noexcept
+		[[nodiscard]] constexpr allocator_type allocator() const noexcept
 		{
 			return allocator_;
 		}
@@ -182,12 +191,12 @@ namespace matteaz
 			return references_ == nullptr ? 0 : *references_;
 		}
 
-		[[nodiscard]] constexpr type_allocator_traits::pointer get() const noexcept
+		[[nodiscard]] constexpr allocator_traits::pointer get() const noexcept
 		{
 			return pointer_;
 		}
 
-		friend constexpr void swap(shared_memory_resource &left, shared_memory_resource &right) noexcept
+		friend constexpr void swap(shared_memory_resource < allocator_type_ > &left, shared_memory_resource < allocator_type_ > &right) noexcept
 		{
 			using std::swap;
 
@@ -216,7 +225,7 @@ namespace std
 	{
 		[[nodiscard]] std::size_t operator () (const matteaz::shared_memory_resource < allocator_type_ > &shared_memory_resource) const noexcept
 		{
-			return std::hash < decltype(shared_memory_resource.get()) > {} (shared_memory_resource.get());
+			return std::hash < decltype(shared_memory_resource.get()) > { } (shared_memory_resource.get());
 		}
 	};
 }

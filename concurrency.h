@@ -13,10 +13,10 @@ namespace matteaz
 		mutex &operator = (const mutex&) = delete;
 		void lock() noexcept;
 		void unlock() noexcept;
-		bool try_lock() noexcept;
+		[[nodiscard]] bool try_lock() noexcept;
 
 		constexpr mutex() noexcept :
-			lock_ SRWLOCK_INIT
+			lock_(SRWLOCK_INIT)
 		{
 
 		}

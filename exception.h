@@ -7,45 +7,49 @@ namespace matteaz
 {
 	class exception
 	{
-	protected:
 		HANDLE heap_;
 		std::size_t *references_;
 		wchar_t *message_;
+
+	protected:
+		[[nodiscard]] constexpr const wchar_t *_message() const noexcept
+		{
+			return message_;
+		}
 
 	public:
 		constexpr explicit exception(const wchar_t *message = nullptr, HANDLE heap = NULL) noexcept :
 			heap_(NULL), references_(nullptr), message_(nullptr)
 		{
-			if (heap == NULL) {
+			if (heap_ == NULL) {
 				message_ = const_cast < wchar_t* > (message);
 				return;
 			}
 
-			if (message == nullptr) return;
+			if (message_ == nullptr) return;
 
-			auto references = static_cast < std::size_t* > (HeapAlloc(heap, 0, sizeof(std::size_t)));
+			auto references = static_cast < std::size_t* > (HeapAlloc(heap_, 0, sizeof(std::size_t)));
 
 			if (references == nullptr) return;
 
+			*references = 1;
+
 			auto size = std::char_traits < wchar_t >::length(message) + 1;
-			auto copy = static_cast < wchar_t* > (HeapAlloc(heap, 0, size * sizeof(wchar_t)));
+			auto copy = static_cast < wchar_t* > (HeapAlloc(heap_, 0, size * sizeof(wchar_t)));
 
 			if (copy == nullptr) {
-				HeapFree(heap, 0, references);
+				HeapFree(heap_, 0, references);
 				return;
 			}
 
-			heap_ = heap;
-			*references = 1;
-			references_ = references;
 			std::char_traits < wchar_t >::copy(copy, message, size);
+			heap_ = heap;
+			references_ = references;
 			message_ = copy;
 		}
 
 		constexpr exception(const exception &other) noexcept :
-			heap_(other.heap_),
-			references_(other.references_),
-			message_(other.message_)
+			heap_(other.heap_), references_(other.references_), message_(other.message_)
 		{
 			if (references_ == nullptr) return;
 
@@ -53,9 +57,7 @@ namespace matteaz
 		}
 
 		constexpr exception(exception &&other) noexcept :
-			heap_(other.heap_),
-			references_(other.references_),
-			message_(other.message_)
+			heap_(other.heap_), references_(other.references_), message_(other.message_)
 		{
 			other.heap_ = NULL;
 			other.references_ = nullptr;
@@ -64,7 +66,7 @@ namespace matteaz
 
 		constexpr virtual ~exception()
 		{
-			if (heap_ == NULL) return;
+			if (references_ == NULL) return;
 
 			--*references_;
 
@@ -128,12 +130,14 @@ namespace matteaz
 		constexpr explicit HRESULT_error(HRESULT code, const wchar_t *message = nullptr, HANDLE heap = NULL) noexcept :
 			exception(message, heap), code_(code)
 		{
-		
+
 		}
 
-		[[nodiscard]] constexpr const wchar_t *message() const noexcept
+		[[nodiscard]] constexpr const wchar_t *message() const noexcept override
 		{
-			return message_ == nullptr ? L"matteaz::HRESULT_error" : message_;
+			auto message = _message();
+
+			return message == nullptr ? L"matteaz::HRESULT_error" : message;
 		}
 	};
 }
