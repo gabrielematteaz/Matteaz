@@ -16,6 +16,18 @@ namespace matteaz
 		LocalFree(file_name);
 	}
 
+	directory_iterator &directory_iterator::operator ++ () noexcept
+	{
+		auto state = state_.get();
+
+		if (FindNextFileW(state->find_file_, &state->find_data_) != 0) return *this;
+
+		FindClose(state->find_file_);
+		state->find_file_ = INVALID_HANDLE_VALUE;
+
+		return *this;
+	}
+
 	directory_iterator directory_iterator::begin() const noexcept
 	{
 		return *this;
