@@ -29,7 +29,11 @@ namespace matteaz
 		using iterator_category = std::input_iterator_tag;
 
 		explicit directory_iterator(const wchar_t *path, const allocator < state > &allocator);
-		[[nodiscard]] directory_iterator &operator ++ () noexcept;
+		directory_iterator(const directory_iterator&) = default;
+		directory_iterator(directory_iterator&&) = default;
+		directory_iterator &operator = (const directory_iterator&) = default;
+		directory_iterator &operator = (directory_iterator&&) = default;
+		directory_iterator &operator ++ () noexcept;
 		[[nodiscard]] directory_iterator begin() const noexcept;
 
 		constexpr ~directory_iterator()
@@ -61,6 +65,17 @@ namespace matteaz
 		[[nodiscard]] constexpr bool operator == (const sentinel&) const noexcept
 		{
 			return state_.get()->find_file_ == INVALID_HANDLE_VALUE;
+		}
+
+		template < typename type_ >
+		[[nodiscard]] constexpr allocator < type_ > get_allocator() const noexcept
+		{
+			return state_.get_allocator();
+		}
+
+		[[nodiscard]] constexpr std::size_t use_count() const noexcept
+		{
+			return state_.use_count();
 		}
 
 		[[nodiscard]] constexpr sentinel end() const noexcept

@@ -2,7 +2,7 @@
 
 namespace matteaz
 {
-	directory_iterator::directory_iterator(const wchar_t * path, const allocator < state > &allocator) :
+	directory_iterator::directory_iterator(const wchar_t* path, const allocator < state > &allocator) :
 		state_(allocator, INVALID_HANDLE_VALUE)
 	{
 		wchar_t *file_name;
