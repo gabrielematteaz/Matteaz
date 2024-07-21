@@ -189,3 +189,15 @@ namespace matteaz
 		return left.get() == right.get();
 	}
 }
+
+namespace std
+{
+	template < typename type_ >
+	struct hash < matteaz::shared_memory_resource < type_ > >
+	{
+		[[nodiscard]] std::size_t operator () (const matteaz::shared_memory_resource < type_ > &shared_memory_resource) const noexcept
+		{
+			return std::hash < type_* > { } (shared_memory_resource.get());
+		}
+	};
+}
