@@ -27,12 +27,9 @@ namespace matteaz
 		using pointer = WIN32_FIND_DATAW*;
 		using reference = WIN32_FIND_DATAW&;
 		using iterator_category = std::input_iterator_tag;
+		using native_handle_type = HANDLE;
 
 		explicit directory_iterator(const wchar_t *path, const allocator < state > &allocator);
-		directory_iterator(const directory_iterator&) = default;
-		directory_iterator(directory_iterator&&) = default;
-		directory_iterator &operator = (const directory_iterator&) = default;
-		directory_iterator &operator = (directory_iterator&&) = default;
 		directory_iterator &operator ++ () noexcept;
 		[[nodiscard]] directory_iterator begin() const noexcept;
 
@@ -65,6 +62,11 @@ namespace matteaz
 		[[nodiscard]] constexpr bool operator == (const sentinel&) const noexcept
 		{
 			return state_.get()->find_file_ == INVALID_HANDLE_VALUE;
+		}
+
+		[[nodiscard]] constexpr HANDLE native_handle() const noexcept
+		{
+			return state_.get()->find_file_;
 		}
 
 		template < typename type_ >
