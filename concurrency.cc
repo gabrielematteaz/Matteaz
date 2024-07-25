@@ -2,7 +2,7 @@
 
 namespace matteaz
 {
-	struct _shared shared;
+	_shared shared;
 
 	void mutex::lock() noexcept
 	{
