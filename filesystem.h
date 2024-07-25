@@ -1,37 +1,45 @@
 #pragma once
 
-#include < Windows.h >
-#include < PathCch.h >
-
+#include < string >
 #include "memory.h"
-
-#pragma comment(lib, "Pathcch.lib")
 
 namespace matteaz
 {
+	struct _state
+	{
+		HANDLE find_file_;
+		WIN32_FIND_DATAW find_data_;
+	};
+
+	struct sentinel { };
+
+	template < typename allocator_type_ = matteaz::allocator < _state > >
 	class directory_iterator
 	{
-		struct state
-		{
-			HANDLE find_file_;
-			WIN32_FIND_DATAW find_data_;
-		};
-
-		shared_memory_resource < state > state_;
+		shared_memory_resource < _state, allocator_type_ > state_;
 
 	public:
-		struct sentinel { };
+		using allocator_type = allocator_type_;
 
 		using value_type = WIN32_FIND_DATAW;
 		using difference_type = std::ptrdiff_t;
-		using pointer = WIN32_FIND_DATAW*;
-		using reference = WIN32_FIND_DATAW&;
+		using pointer = const WIN32_FIND_DATAW *;
+		using reference = const WIN32_FIND_DATAW &;
 		using iterator_category = std::input_iterator_tag;
-		using native_handle_type = HANDLE;
 
-		explicit directory_iterator(const wchar_t *path, const allocator < state > &allocator);
-		directory_iterator &operator ++ () noexcept;
-		[[nodiscard]] directory_iterator begin() const noexcept;
+		explicit directory_iterator(const wchar_t *path, const allocator_type_ &allocator = allocator_type_()) :
+			state_(allocator, INVALID_HANDLE_VALUE)
+		{
+			std::basic_string < wchar_t, std::char_traits < wchar_t >, typename std::allocator_traits < allocator_type_ >::template rebind_alloc < wchar_t > > file_name(path);
+
+			file_name.append(L"\\*");
+
+			if (file_name.length() > MAX_PATH && !file_name.starts_with(L"\\\\?\\")) file_name.insert(0, L"\\\\?\\");
+
+			auto state = state_.get();
+
+			state->find_file_ = FindFirstFileW(file_name.c_str(), &state->find_data_);
+		}
 
 		constexpr ~directory_iterator()
 		{
@@ -49,35 +57,41 @@ namespace matteaz
 			return state_.get()->find_file_ != INVALID_HANDLE_VALUE;
 		}
 
-		[[nodiscard]] constexpr WIN32_FIND_DATAW *operator -> () const noexcept
+		[[nodiscard]] constexpr const WIN32_FIND_DATAW *operator -> () const noexcept
 		{
 			return &state_.get()->find_data_;
 		}
 
-		[[nodiscard]] constexpr WIN32_FIND_DATAW &operator * () const noexcept
+		directory_iterator &operator ++ () noexcept
+		{
+			auto state = state_.get();
+
+			if (FindNextFileW(state->find_file_, &state->find_data_)) return *this;
+
+			FindClose(state->find_file_);
+			state->find_file_ = INVALID_HANDLE_VALUE;
+
+			return *this;
+		}
+
+		[[nodiscard]] constexpr const WIN32_FIND_DATAW &operator * () const noexcept
 		{
 			return state_.get()->find_data_;
 		}
 
-		[[nodiscard]] constexpr bool operator == (const sentinel&) const noexcept
+		[[nodiscard]] constexpr bool operator == (const sentinel &) const noexcept
 		{
 			return state_.get()->find_file_ == INVALID_HANDLE_VALUE;
 		}
 
-		[[nodiscard]] constexpr HANDLE native_handle() const noexcept
-		{
-			return state_.get()->find_file_;
-		}
-
-		template < typename type_ >
-		[[nodiscard]] constexpr allocator < type_ > get_allocator() const noexcept
+		[[nodiscard]] constexpr allocator_type_ get_allocator() const noexcept
 		{
 			return state_.get_allocator();
 		}
 
-		[[nodiscard]] constexpr std::size_t use_count() const noexcept
+		[[nodiscard]] constexpr directory_iterator begin() const noexcept
 		{
-			return state_.use_count();
+			return *this;
 		}
 
 		[[nodiscard]] constexpr sentinel end() const noexcept
