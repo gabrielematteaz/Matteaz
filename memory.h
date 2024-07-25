@@ -127,7 +127,7 @@ namespace matteaz
 		return left.native_handle() == right.native_handle();
 	}
 
-	template < typename type_, typename allocator_type_ = matteaz::allocator < type_ > >
+	template < typename type_, typename allocator_type_ = allocator < type_ > >
 		requires std::is_nothrow_destructible_v < type_ > && std::is_same_v < type_, typename allocator_type_::value_type >
 	class shared_memory_resource
 	{

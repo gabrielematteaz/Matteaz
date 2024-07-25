@@ -13,14 +13,12 @@ namespace matteaz
 
 	struct sentinel { };
 
-	template < typename allocator_type_ = matteaz::allocator < _state > >
+	template < typename allocator_type_ = allocator < _state > >
 	class directory_iterator
 	{
-		shared_memory_resource < _state, allocator_type_ > state_;
+		shared_memory_resource < _state, typename std::allocator_traits < allocator_type_ >::template rebind_alloc < _state > > state_;
 
 	public:
-		using allocator_type = allocator_type_;
-
 		using value_type = WIN32_FIND_DATAW;
 		using difference_type = std::ptrdiff_t;
 		using pointer = const WIN32_FIND_DATAW *;
@@ -82,11 +80,6 @@ namespace matteaz
 		[[nodiscard]] constexpr bool operator == (const sentinel &) const noexcept
 		{
 			return state_.get()->find_file_ == INVALID_HANDLE_VALUE;
-		}
-
-		[[nodiscard]] constexpr allocator_type_ get_allocator() const noexcept
-		{
-			return state_.get_allocator();
 		}
 
 		[[nodiscard]] constexpr directory_iterator begin() const noexcept
