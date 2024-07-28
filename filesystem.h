@@ -5,18 +5,21 @@
 
 namespace matteaz
 {
-	struct _state
+	struct sentinel
 	{
-		HANDLE find_file_;
-		WIN32_FIND_DATAW find_data_;
+		explicit sentinel() = default;
 	};
 
-	struct sentinel { };
-
-	template < typename allocator_type_ = allocator < _state > >
+	template < typename allocator_type_ = allocator < void > >
 	class directory_iterator
 	{
-		shared_memory_resource < _state, typename std::allocator_traits < allocator_type_ >::template rebind_alloc < _state > > state_;
+		struct state
+		{
+			HANDLE find_file;
+			WIN32_FIND_DATAW find_data;
+		};
+
+		shared_memory_resource < state, typename std::allocator_traits < allocator_type_ >::template rebind_alloc < state > > state_;
 
 	public:
 		using value_type = WIN32_FIND_DATAW;
@@ -36,12 +39,12 @@ namespace matteaz
 
 			auto state = state_.get();
 
-			state->find_file_ = FindFirstFileW(file_name.c_str(), &state->find_data_);
+			state->find_file = FindFirstFileW(file_name.c_str(), &state->find_data);
 		}
 
 		constexpr ~directory_iterator()
 		{
-			if (state_.use_count() == 1) FindClose(state_.get()->find_file_);
+			if (state_.use_count() == 1) FindClose(state_.get()->find_file);
 		}
 
 		[[deprecated("Unachievable in this implementation")]]
@@ -52,34 +55,34 @@ namespace matteaz
 
 		[[nodiscard]] constexpr explicit operator bool() const noexcept
 		{
-			return state_.get()->find_file_ != INVALID_HANDLE_VALUE;
+			return state_.get()->find_file != INVALID_HANDLE_VALUE;
 		}
 
-		[[nodiscard]] constexpr const WIN32_FIND_DATAW *operator -> () const noexcept
+		[[nodiscard]] constexpr pointer operator -> () const noexcept
 		{
-			return &state_.get()->find_data_;
+			return &state_.get()->find_data;
 		}
 
 		directory_iterator &operator ++ () noexcept
 		{
 			auto state = state_.get();
 
-			if (FindNextFileW(state->find_file_, &state->find_data_)) return *this;
+			if (FindNextFileW(state->find_file, &state->find_data)) return *this;
 
-			FindClose(state->find_file_);
-			state->find_file_ = INVALID_HANDLE_VALUE;
+			FindClose(state->find_file);
+			state->find_file = INVALID_HANDLE_VALUE;
 
 			return *this;
 		}
 
-		[[nodiscard]] constexpr const WIN32_FIND_DATAW &operator * () const noexcept
+		[[nodiscard]] constexpr reference operator * () const noexcept
 		{
-			return state_.get()->find_data_;
+			return state_.get()->find_data;
 		}
 
 		[[nodiscard]] constexpr bool operator == (const sentinel &) const noexcept
 		{
-			return state_.get()->find_file_ == INVALID_HANDLE_VALUE;
+			return state_.get()->find_file == INVALID_HANDLE_VALUE;
 		}
 
 		[[nodiscard]] constexpr directory_iterator begin() const noexcept
@@ -89,7 +92,7 @@ namespace matteaz
 
 		[[nodiscard]] constexpr sentinel end() const noexcept
 		{
-			return { };
+			return sentinel();
 		}
 
 		friend constexpr void swap(directory_iterator &left, directory_iterator &right) noexcept
