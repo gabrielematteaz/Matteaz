@@ -2,17 +2,17 @@
 
 #include < Windows.h >
 
-namespace matteaz
+namespace Matteaz
 {
-	class mutex
+	class Mutex
 	{
-		SRWLOCK lock_;
+		SRWLOCK slimLock;
 
 	public:
 		using native_handle_type = PSRWLOCK;
 
-		mutex(const mutex &) = delete;
-		mutex &operator = (const mutex &) = delete;
+		Mutex(const Mutex &) = delete;
+		Mutex &operator = (const Mutex &) = delete;
 		void lock() noexcept;
 		void unlock() noexcept;
 		[[nodiscard]] bool try_lock() noexcept;
@@ -20,15 +20,15 @@ namespace matteaz
 		void unlock_shared() noexcept;
 		[[nodiscard]] bool try_lock_shared() noexcept;
 
-		constexpr mutex() noexcept :
-			lock_(SRWLOCK_INIT)
+		constexpr Mutex() noexcept :
+			slimLock(SRWLOCK_INIT)
 		{
 
 		}
 
 		[[nodiscard]] constexpr native_handle_type native_handle() noexcept
 		{
-			return &lock_;
+			return &slimLock;
 		}
 	};
 }
