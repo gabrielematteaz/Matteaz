@@ -1,25 +1,18 @@
 #ifndef MATTEAZ_COMMANDLINE_H
 #define MATTEAZ_COMMANDLINE_H
 
-#include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <cstddef>
 #include <iterator>
-#include <optional>
 #include <algorithm>
+#include <utility>
 
 namespace Matteaz
 {
-	enum class NormalizationError;
 	class CommandLineIterator;
-	[[nodiscard]] constexpr std::expected < std::string, NormalizationError > Normalize(std::string_view string);
-
-	enum class NormalizationError
-	{
-		UnmatchedSingleQuote,
-		UnmatchedDoubleQuote,
-	};
+	[[nodiscard]] constexpr std::optional < std::string > Normalize(std::string_view string);
 
 	class CommandLineIterator
 	{
@@ -32,22 +25,20 @@ namespace Matteaz
 
 	private:
 		std::string_view thisCommandLine;
-		std::string_view::size_type thisOffset = 0;
-		std::string_view thisArgument;
+		std::string_view::size_type thisCurrentOffset = 0;
+		value_type thisCurrentArgument; // guaranteed to be normalizable
 
 	public:
 		CommandLineIterator() = default;
-		constexpr explicit CommandLineIterator(std::string_view commandLine) noexcept;
+		constexpr CommandLineIterator(std::string_view commandLine) noexcept;
 		constexpr CommandLineIterator operator ++ (int) noexcept;
 		[[nodiscard]] constexpr pointer operator -> () const noexcept;
 		constexpr CommandLineIterator &operator ++ () noexcept;
-		// note: the returned argument is not normalized
 		[[nodiscard]] constexpr reference operator * () const noexcept;
 		[[nodiscard]] bool operator == (const CommandLineIterator &) const = default;
-		// note: iteration termination is not an error
-		[[nodiscard]] constexpr std::optional < NormalizationError > TryIncrement() noexcept;
 		[[nodiscard]] constexpr CommandLineIterator begin() const noexcept;
 		[[nodiscard]] constexpr CommandLineIterator end() const noexcept;
+		constexpr bool TryIncrement() noexcept;
 	};
 
 	constexpr CommandLineIterator::CommandLineIterator(std::string_view commandLine) noexcept :
@@ -67,14 +58,12 @@ namespace Matteaz
 
 	constexpr CommandLineIterator::pointer CommandLineIterator::operator -> () const noexcept
 	{
-		return &thisArgument;
+		return &thisCurrentArgument;
 	}
 
 	constexpr CommandLineIterator &CommandLineIterator::operator ++ () noexcept
 	{
-		auto result = TryIncrement();
-
-		if (result.has_value())
+		if (TryIncrement() == false)
 			*this = end();
 
 		return *this;
@@ -82,58 +71,7 @@ namespace Matteaz
 
 	constexpr CommandLineIterator::reference CommandLineIterator::operator * () const noexcept
 	{
-		return thisArgument;
-	}
-
-	constexpr std::optional < NormalizationError > CommandLineIterator::TryIncrement() noexcept
-	{
-		auto isDelimiter = [] (char character) constexpr noexcept
-		{
-			return character == ' ' ||
-				character == '\t' || character == '\n' || character == '\r' || character == '\v' || character == '\f';
-		};
-
-		auto first = std::find_if_not(thisCommandLine.begin() + thisOffset, thisCommandLine.end(), isDelimiter);
-
-		if (first == thisCommandLine.end())
-		{
-			*this = end();
-			return std::nullopt;
-		}
-
-		auto current = first;
-		bool skip = false;
-		bool withinSingleQuotes = false;
-		bool withinDoubleQuotes = false;
-
-		for (; current != thisCommandLine.end(); ++current)
-		{
-			if (skip)
-			{
-				skip = false;
-				continue;
-			}
-
-			if (*current == '\\' && withinSingleQuotes == false)
-				skip = true;
-			else if (*current == '\'' && withinDoubleQuotes == false)
-				withinSingleQuotes = !withinSingleQuotes;
-			else if (*current == '\"' && withinSingleQuotes == false)
-				withinDoubleQuotes = !withinDoubleQuotes;
-			else if (isDelimiter(*current) && withinSingleQuotes == false && withinDoubleQuotes == false)
-				break;
-		}
-
-		if (withinSingleQuotes)
-			return NormalizationError::UnmatchedSingleQuote;
-
-		if (withinDoubleQuotes)
-			return NormalizationError::UnmatchedDoubleQuote;
-
-		thisOffset = current - thisCommandLine.begin();
-		thisArgument = thisCommandLine.substr(first - thisCommandLine.begin(), current - first);
-
-		return std::nullopt;
+		return thisCurrentArgument;
 	}
 
 	constexpr CommandLineIterator CommandLineIterator::begin() const noexcept
@@ -146,58 +84,85 @@ namespace Matteaz
 		return { };
 	}
 
-	constexpr std::expected < std::string, NormalizationError > Normalize(std::string_view string)
+	constexpr bool CommandLineIterator::TryIncrement() noexcept
+	{
+		auto isDelimiter = [] (char character) constexpr noexcept
+		{
+			return character == ' ' || character == '\t' || character == '\n' || character == '\r' || character == '\v' || character == '\f';
+		};
+
+		auto first = std::find_if_not(thisCommandLine.begin() + thisCurrentOffset, thisCommandLine.end(), isDelimiter);
+
+		if (first == thisCommandLine.end()) // end of iteration (not an error)
+		{
+			*this = end();
+			return true;
+		}
+
+		auto current = first;
+		bool skip = false;
+		bool withinSingleQuotes = false;
+		bool withinDoubleQuotes = false;
+
+		for (; current != thisCommandLine.end(); ++current)
+		{
+			if (skip)
+				skip = false;
+			else if (*current == '\\' && withinSingleQuotes == false)
+				skip = true;
+			else if (*current == '\'' && withinDoubleQuotes == false)
+				withinSingleQuotes = !withinSingleQuotes;
+			else if (*current == '\"' && withinSingleQuotes == false)
+				withinDoubleQuotes = !withinDoubleQuotes;
+			else if (isDelimiter(*current) && withinSingleQuotes == false && withinDoubleQuotes == false)
+				break;
+		}
+
+		if (withinSingleQuotes || withinDoubleQuotes)
+			return false;
+
+		thisCurrentOffset = current - thisCommandLine.begin();
+		thisCurrentArgument = thisCommandLine.substr(first - thisCommandLine.begin(), current - first);
+
+		return true;
+	}
+
+	constexpr std::optional < std::string > Normalize(std::string_view string)
 	{
 		std::string normalizedString;
 
 		normalizedString.reserve(string.length());
 
-		auto first = string.begin();
-		auto current = first;
 		bool skip = false;
 		bool withinSingleQuotes = false;
 		bool withinDoubleQuotes = false;
-		bool update = false;
 
-		for (; current != string.end(); ++current)
+		for (auto current = string.begin(); current != string.end(); ++current)
 		{
 			if (skip)
 			{
 				skip = false;
-				continue;
-			}
 
-			if (*current == '\\' && withinSingleQuotes == false)
-			{
+				if (withinDoubleQuotes == false || *current == '\"' || *current == '\\')
+					normalizedString.push_back(*current);
+				else
+				{
+					normalizedString.push_back('\\');
+					normalizedString.push_back(*current);
+				}
+			}
+			else if (*current == '\\' && withinSingleQuotes == false)
 				skip = true;
-				update = true;
-			}
 			else if (*current == '\'' && withinDoubleQuotes == false)
-			{
 				withinSingleQuotes = !withinSingleQuotes;
-				update = true;
-			}
 			else if (*current == '\"' && withinSingleQuotes == false)
-			{
 				withinDoubleQuotes = !withinDoubleQuotes;
-				update = true;
-			}
-
-			if (update)
-			{
-				normalizedString.append(first, current);
-				first = current + 1;
-				update = false;
-			}
+			else
+				normalizedString.push_back(*current);
 		}
 
-		if (withinSingleQuotes)
-			return std::unexpected(NormalizationError::UnmatchedSingleQuote);
-		
-		if (withinDoubleQuotes)
-			return std::unexpected(NormalizationError::UnmatchedDoubleQuote);
-
-		normalizedString.append(first, current);
+		if (withinSingleQuotes || withinDoubleQuotes)
+			return std::nullopt;
 
 		return std::move(normalizedString);
 	}
