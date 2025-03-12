@@ -179,7 +179,7 @@ namespace Matteaz
 		if (withinSingleQuotes || withinDoubleQuotes)
 			return std::nullopt;
 
-		normalizedString.append(first, current);
+		normalizedString.append(first, current - skip); // edge case where argument ends with a backslash
 
 		return std::move(normalizedString);
 	}
