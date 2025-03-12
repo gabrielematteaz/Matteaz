@@ -26,7 +26,7 @@ namespace Matteaz
 	private:
 		std::string_view thisCommandLine;
 		std::string_view::size_type thisCurrentOffset = 0;
-		value_type thisCurrentArgument; // guaranteed to be normalizable
+		value_type thisCurrentArgument;
 
 	public:
 		CommandLineIterator() = default;
@@ -93,7 +93,7 @@ namespace Matteaz
 
 		auto first = std::find_if_not(thisCommandLine.begin() + thisCurrentOffset, thisCommandLine.end(), isDelimiter);
 
-		if (first == thisCommandLine.end()) // end of iteration (not an error)
+		if (first == thisCommandLine.end())
 		{
 			*this = end();
 			return true;
@@ -133,36 +133,53 @@ namespace Matteaz
 
 		normalizedString.reserve(string.length());
 
+		auto first = string.begin();
+		auto current = first;
 		bool skip = false;
+		bool update = false;
 		bool withinSingleQuotes = false;
 		bool withinDoubleQuotes = false;
 
-		for (auto current = string.begin(); current != string.end(); ++current)
+		for (; current != string.end(); ++current)
 		{
 			if (skip)
 			{
 				skip = false;
 
-				if (withinDoubleQuotes == false || *current == '\"' || *current == '\\')
-					normalizedString.push_back(*current);
-				else
+				if (withinDoubleQuotes == false || *current == '\\' || *current == '\"')
 				{
-					normalizedString.push_back('\\');
-					normalizedString.push_back(*current);
+					normalizedString.append(first, current - 1);
+					first = current;
 				}
+
+				continue;
 			}
-			else if (*current == '\\' && withinSingleQuotes == false)
+
+			if (*current == '\\' && withinSingleQuotes == false)
 				skip = true;
 			else if (*current == '\'' && withinDoubleQuotes == false)
+			{
+				update = true;
 				withinSingleQuotes = !withinSingleQuotes;
+			}
 			else if (*current == '\"' && withinSingleQuotes == false)
+			{
+				update = true;
 				withinDoubleQuotes = !withinDoubleQuotes;
-			else
-				normalizedString.push_back(*current);
+			}
+
+			if (update)
+			{
+				normalizedString.append(first, current);
+				first = current + 1;
+				update = false;
+			}
 		}
 
 		if (withinSingleQuotes || withinDoubleQuotes)
 			return std::nullopt;
+
+		normalizedString.append(first, current);
 
 		return std::move(normalizedString);
 	}
