@@ -11,10 +11,10 @@
 
 namespace Matteaz
 {
-	class CommandLineIterator;
+	class ArgumentsIterator;
 	[[nodiscard]] constexpr std::optional < std::string > Normalize(std::string_view string);
 
-	class CommandLineIterator
+	class ArgumentsIterator
 	{
 	public:
 		using value_type = std::string_view;
@@ -26,28 +26,28 @@ namespace Matteaz
 	private:
 		std::string_view thisCommandLine;
 		std::string_view::size_type thisCurrentOffset = 0;
-		value_type thisCurrentArgument;
+		value_type thisCurrentArgument; // guaranteed to be normalizable
 
 	public:
-		CommandLineIterator() = default;
-		constexpr CommandLineIterator(std::string_view commandLine) noexcept;
-		constexpr CommandLineIterator operator ++ (int) noexcept;
+		ArgumentsIterator() = default;
+		constexpr ArgumentsIterator(std::string_view commandLine) noexcept;
+		constexpr ArgumentsIterator operator ++ (int) noexcept;
 		[[nodiscard]] constexpr pointer operator -> () const noexcept;
-		constexpr CommandLineIterator &operator ++ () noexcept;
+		constexpr ArgumentsIterator &operator ++ () noexcept;
 		[[nodiscard]] constexpr reference operator * () const noexcept;
-		[[nodiscard]] bool operator == (const CommandLineIterator &) const = default;
-		[[nodiscard]] constexpr CommandLineIterator begin() const noexcept;
-		[[nodiscard]] constexpr CommandLineIterator end() const noexcept;
+		[[nodiscard]] bool operator == (const ArgumentsIterator &) const = default;
+		[[nodiscard]] constexpr ArgumentsIterator begin() const noexcept;
+		[[nodiscard]] constexpr ArgumentsIterator end() const noexcept;
 		constexpr bool TryIncrement() noexcept;
 	};
 
-	constexpr CommandLineIterator::CommandLineIterator(std::string_view commandLine) noexcept :
+	constexpr ArgumentsIterator::ArgumentsIterator(std::string_view commandLine) noexcept :
 		thisCommandLine(commandLine)
 	{
 		operator ++ ();
 	}
 
-	constexpr CommandLineIterator CommandLineIterator::operator ++ (int) noexcept
+	constexpr ArgumentsIterator ArgumentsIterator::operator ++ (int) noexcept
 	{
 		auto previousThis = *this;
 
@@ -56,12 +56,12 @@ namespace Matteaz
 		return previousThis;
 	}
 
-	constexpr CommandLineIterator::pointer CommandLineIterator::operator -> () const noexcept
+	constexpr ArgumentsIterator::pointer ArgumentsIterator::operator -> () const noexcept
 	{
 		return &thisCurrentArgument;
 	}
 
-	constexpr CommandLineIterator &CommandLineIterator::operator ++ () noexcept
+	constexpr ArgumentsIterator &ArgumentsIterator::operator ++ () noexcept
 	{
 		if (TryIncrement() == false)
 			*this = end();
@@ -69,22 +69,22 @@ namespace Matteaz
 		return *this;
 	}
 
-	constexpr CommandLineIterator::reference CommandLineIterator::operator * () const noexcept
+	constexpr ArgumentsIterator::reference ArgumentsIterator::operator * () const noexcept
 	{
 		return thisCurrentArgument;
 	}
 
-	constexpr CommandLineIterator CommandLineIterator::begin() const noexcept
+	constexpr ArgumentsIterator ArgumentsIterator::begin() const noexcept
 	{
 		return *this;
 	}
 
-	constexpr CommandLineIterator CommandLineIterator::end() const noexcept
+	constexpr ArgumentsIterator ArgumentsIterator::end() const noexcept
 	{
 		return { };
 	}
 
-	constexpr bool CommandLineIterator::TryIncrement() noexcept
+	constexpr bool ArgumentsIterator::TryIncrement() noexcept
 	{
 		auto isDelimiter = [] (char character) constexpr noexcept
 		{
@@ -93,7 +93,7 @@ namespace Matteaz
 
 		auto first = std::find_if_not(thisCommandLine.begin() + thisCurrentOffset, thisCommandLine.end(), isDelimiter);
 
-		if (first == thisCommandLine.end())
+		if (first == thisCommandLine.end()) // end of iteration (not an error)
 		{
 			*this = end();
 			return true;
@@ -146,7 +146,7 @@ namespace Matteaz
 			{
 				skip = false;
 
-				if (withinDoubleQuotes == false || *current == '\\' || *current == '\"')
+				if (withinDoubleQuotes == false || *current == '\\' || *current == '\"') // 1st edge case
 				{
 					normalizedString.append(first, current - 1);
 					first = current;
@@ -170,16 +170,16 @@ namespace Matteaz
 
 			if (update)
 			{
+				update = false;
 				normalizedString.append(first, current);
 				first = current + 1;
-				update = false;
 			}
 		}
 
 		if (withinSingleQuotes || withinDoubleQuotes)
 			return std::nullopt;
 
-		normalizedString.append(first, current - skip); // edge case where argument ends with a backslash
+		normalizedString.append(first, current - skip); // 2nd edge case
 
 		return std::move(normalizedString);
 	}
