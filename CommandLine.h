@@ -7,13 +7,12 @@
 #include <cstddef>
 #include <iterator>
 #include <algorithm>
-#include <utility>
 
 namespace Matteaz
 {
 	class ArgumentsIterator;
-	[[nodiscard]] constexpr std::optional < std::string > Normalize(std::string_view string);
-
+	[[nodiscard]] constexpr std::optional < std::string > NormalizeArgument(std::string_view argument);
+	
 	class ArgumentsIterator
 	{
 	public:
@@ -22,12 +21,12 @@ namespace Matteaz
 		using reference = const value_type &;
 		using pointer = const value_type *;
 		using iterator_category = std::forward_iterator_tag;
-
+		
 	private:
-		std::string_view thisCommandLine;
-		std::string_view::size_type thisCurrentOffset = 0;
-		value_type thisCurrentArgument; // guaranteed to be normalizable
-
+		std::string_view _CommandLine;
+		std::string_view::size_type _Offset = 0;
+		value_type _Argument;
+		
 	public:
 		ArgumentsIterator() = default;
 		constexpr ArgumentsIterator(std::string_view commandLine) noexcept;
@@ -38,73 +37,49 @@ namespace Matteaz
 		[[nodiscard]] bool operator == (const ArgumentsIterator &) const = default;
 		[[nodiscard]] constexpr ArgumentsIterator begin() const noexcept;
 		[[nodiscard]] constexpr ArgumentsIterator end() const noexcept;
-		constexpr bool TryIncrement() noexcept;
 	};
-
+	
 	constexpr ArgumentsIterator::ArgumentsIterator(std::string_view commandLine) noexcept :
-		thisCommandLine(commandLine)
+		_CommandLine(commandLine)
 	{
 		operator ++ ();
 	}
-
+	
 	constexpr ArgumentsIterator ArgumentsIterator::operator ++ (int) noexcept
 	{
 		auto previousThis = *this;
-
+		
 		operator ++ ();
-
+		
 		return previousThis;
 	}
-
+	
 	constexpr ArgumentsIterator::pointer ArgumentsIterator::operator -> () const noexcept
 	{
-		return &thisCurrentArgument;
+		return &_Argument;
 	}
-
+	
 	constexpr ArgumentsIterator &ArgumentsIterator::operator ++ () noexcept
-	{
-		if (TryIncrement() == false)
-			*this = end();
-
-		return *this;
-	}
-
-	constexpr ArgumentsIterator::reference ArgumentsIterator::operator * () const noexcept
-	{
-		return thisCurrentArgument;
-	}
-
-	constexpr ArgumentsIterator ArgumentsIterator::begin() const noexcept
-	{
-		return *this;
-	}
-
-	constexpr ArgumentsIterator ArgumentsIterator::end() const noexcept
-	{
-		return { };
-	}
-
-	constexpr bool ArgumentsIterator::TryIncrement() noexcept
 	{
 		auto isDelimiter = [] (char character) constexpr noexcept
 		{
 			return character == ' ' || character == '\t' || character == '\n' || character == '\r' || character == '\v' || character == '\f';
 		};
-
-		auto first = std::find_if_not(thisCommandLine.begin() + thisCurrentOffset, thisCommandLine.end(), isDelimiter);
-
-		if (first == thisCommandLine.end()) // end of iteration (not an error)
+		
+		auto first = std::find_if_not(_CommandLine.begin() + _Offset, _CommandLine.end(), isDelimiter);
+		
+		if (first == _CommandLine.end())
 		{
 			*this = end();
-			return true;
+			return *this;
 		}
-
+		
 		auto current = first;
 		bool skip = false;
 		bool withinSingleQuotes = false;
 		bool withinDoubleQuotes = false;
-
-		for (; current != thisCommandLine.end(); ++current)
+		
+		for (; current != _CommandLine.end(); ++current)
 		{
 			if (skip)
 				skip = false;
@@ -117,71 +92,86 @@ namespace Matteaz
 			else if (isDelimiter(*current) && withinSingleQuotes == false && withinDoubleQuotes == false)
 				break;
 		}
-
+		
 		if (withinSingleQuotes || withinDoubleQuotes)
-			return false;
-
-		thisCurrentOffset = current - thisCommandLine.begin();
-		thisCurrentArgument = thisCommandLine.substr(first - thisCommandLine.begin(), current - first);
-
-		return true;
+		{
+			*this = end();
+			return *this;
+		}
+		
+		_Offset = current - _CommandLine.begin();
+		_Argument = _CommandLine.substr(first - _CommandLine.begin(), current - first);
+		
+		return *this;
 	}
-
-	constexpr std::optional < std::string > Normalize(std::string_view string)
+	
+	constexpr ArgumentsIterator::reference ArgumentsIterator::operator * () const noexcept
 	{
-		std::string normalizedString;
-
-		normalizedString.reserve(string.length());
-
-		auto first = string.begin();
+		return _Argument;
+	}
+	
+	constexpr ArgumentsIterator ArgumentsIterator::begin() const noexcept
+	{
+		return *this;
+	}
+	
+	constexpr ArgumentsIterator ArgumentsIterator::end() const noexcept
+	{
+		return { };
+	}
+	
+	constexpr std::optional < std::string > NormalizeArgument(std::string_view argument)
+	{
+		std::string normalizedArgument;
+		
+		normalizedArgument.reserve(argument.length());
+		
+		auto first = argument.begin();
 		auto current = first;
 		bool skip = false;
 		bool update = false;
 		bool withinSingleQuotes = false;
 		bool withinDoubleQuotes = false;
-
-		for (; current != string.end(); ++current)
+		
+		for (; current != argument.end(); ++current)
 		{
 			if (skip)
 			{
 				skip = false;
-
-				if (withinDoubleQuotes == false || *current == '\\' || *current == '\"') // 1st edge case
+				
+				if (withinDoubleQuotes == false || *current == '\"' || *current == '\\') // first edge case
 				{
-					normalizedString.append(first, current - 1);
+					normalizedArgument.append(first, current - 1);
 					first = current;
 				}
-
-				continue;
 			}
-
-			if (*current == '\\' && withinSingleQuotes == false)
+			else if (*current == '\\' && withinSingleQuotes == false)
 				skip = true;
 			else if (*current == '\'' && withinDoubleQuotes == false)
 			{
-				update = true;
 				withinSingleQuotes = !withinSingleQuotes;
+				update = true;
 			}
 			else if (*current == '\"' && withinSingleQuotes == false)
 			{
-				update = true;
 				withinDoubleQuotes = !withinDoubleQuotes;
+				update = true;
 			}
-
+			
 			if (update)
 			{
 				update = false;
-				normalizedString.append(first, current);
+				normalizedArgument.append(first, current);
 				first = current + 1;
 			}
 		}
-
+		
 		if (withinSingleQuotes || withinDoubleQuotes)
 			return std::nullopt;
-
-		normalizedString.append(first, current - skip); // 2nd edge case
-
-		return std::move(normalizedString);
+		
+		normalizedArgument.append(first, current - skip); // second edge case
+		
+		return normalizedArgument;
 	}
 }
 
